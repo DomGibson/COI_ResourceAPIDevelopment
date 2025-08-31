@@ -47,6 +47,10 @@
       <HintPath>$(COI_MANAGED)\UnityEngine.IMGUIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>$(COI_MANAGED)\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
 
     <!-- BCL extras used by Unity/COI -->
     <Reference Include="System.Net.Http">
