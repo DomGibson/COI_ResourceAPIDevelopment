@@ -1,0 +1,6 @@
+C:\Users\noobo\OneDrive\Documents\GitHub\COI_ResourceAPIDevelopment\obj\Debug\net472\CoiStatsBridge.csproj.AssemblyReference.cache
+C:\Users\noobo\OneDrive\Documents\GitHub\COI_ResourceAPIDevelopment\obj\Debug\net472\CoiStatsBridge.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\noobo\OneDrive\Documents\GitHub\COI_ResourceAPIDevelopment\obj\Debug\net472\CoiStatsBridge.AssemblyInfoInputs.cache
+C:\Users\noobo\OneDrive\Documents\GitHub\COI_ResourceAPIDevelopment\obj\Debug\net472\CoiStatsBridge.AssemblyInfo.cs
+C:\Users\noobo\OneDrive\Documents\GitHub\COI_ResourceAPIDevelopment\obj\Debug\net472\CoiStatsBridge.csproj.CoreCompileInputs.cache
+C:\Users\noobo\OneDrive\Documents\GitHub\COI_ResourceAPIDevelopment\obj\Debug\net472\CoiStatsBridge.sourcelink.json
