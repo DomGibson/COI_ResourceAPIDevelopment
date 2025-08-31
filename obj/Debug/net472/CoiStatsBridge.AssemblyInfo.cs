@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("CoiStatsBridge")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+cf8e527787f5e32ead049fcf99326238e9e5e30a")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+901c181ee737964257555b79c130fed489785c37")]
 [assembly: System.Reflection.AssemblyProductAttribute("CoiStatsBridge")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CoiStatsBridge")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
