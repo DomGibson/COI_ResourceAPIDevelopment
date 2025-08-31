@@ -24,6 +24,7 @@ namespace CoiStatsBridge
       var snapshot = TypedSnapshotReader.Read();
       var ts = NowMs();
       var payload = JsonWriter.BuildPayload(ts, _tick, snapshot);
+      DebugState.Tick = _tick;
       _tick++;
 
       try

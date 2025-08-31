@@ -1,6 +1,9 @@
 using System;
 using System.Linq;
 using UnityEngine;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 namespace CoiStatsBridge
 {
@@ -8,12 +11,15 @@ namespace CoiStatsBridge
   {
     const int _winId = unchecked((int)0xC01ABEEF);
     Rect _rect = new Rect(32, 32, 420, 280);
-    bool _show = true;
+    bool _show = false;
     Vector2 _scroll;
 
     void Update()
     {
       if (Input.GetKeyDown(KeyCode.F9)) _show = !_show;
+#if ENABLE_INPUT_SYSTEM
+      if (Keyboard.current != null && Keyboard.current.f9Key.wasPressedThisFrame) _show = !_show;
+#endif
     }
 
     void OnGUI()
@@ -29,6 +35,7 @@ namespace CoiStatsBridge
       GUILayout.Label($"method:   {DebugState.Method}");
       GUILayout.Label($"products: {DebugState.Products}");
       GUILayout.Label($"last post (UTC): {DebugState.LastPostUtc}");
+      GUILayout.Label($"tick:     {DebugState.Tick}");
 
       GUILayout.Space(6);
       GUILayout.Label("Preview (top 15 by qty):");

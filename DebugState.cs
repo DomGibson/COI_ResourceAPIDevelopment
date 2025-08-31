@@ -8,5 +8,6 @@ namespace CoiStatsBridge
     public static string Method   = "not bound";
     public static int    Products = 0;
     public static string LastPostUtc = "-";
+    public static long   Tick = 0;
   }
 }
