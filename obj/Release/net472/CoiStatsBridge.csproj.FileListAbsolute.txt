@@ -1,0 +1,1 @@
+C:\Users\noobo\OneDrive\Documents\GitHub\COI_ResourceAPIDevelopment\obj\Release\net472\CoiStatsBridge.csproj.AssemblyReference.cache
