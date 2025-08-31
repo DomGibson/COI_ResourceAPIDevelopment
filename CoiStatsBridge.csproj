@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <RootNamespace>CoiStatsBridge</RootNamespace>
+    <AssemblyName>CoiStatsBridge</AssemblyName>
+    <Deterministic>false</Deterministic>
+
+    <!-- You can hardcode here to avoid env var:
+         <COI_MANAGED>D:\SteamLibrary\steamapps\common\Captain of Industry\Captain of Industry_Data\Managed</COI_MANAGED> -->
+  </PropertyGroup>
+
+  <!-- Fail fast if COI_MANAGED is wrong -->
+  <Target Name="CheckCOIManaged" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(COI_MANAGED)'==''" Text="COI_MANAGED is not set. Pass /p:COI_MANAGED=&quot;...Managed&quot; or set the env var." />
+    <Error Condition="!Exists('$(COI_MANAGED)\Mafi.Core.dll')" Text="COI_MANAGED is wrong: '$(COI_MANAGED)'. Could not find Mafi.Core.dll" />
+  </Target>
+
+  <ItemGroup>
+    <Reference Include="Mafi">
+      <HintPath>$(COI_MANAGED)\Mafi.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Mafi.Core">
+      <HintPath>$(COI_MANAGED)\Mafi.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Mafi.Base">
+      <HintPath>$(COI_MANAGED)\Mafi.Base.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Mafi.Unity">
+      <HintPath>$(COI_MANAGED)\Mafi.Unity.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Unity bits -->
+    <Reference Include="UnityEngine">
+      <HintPath>$(COI_MANAGED)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(COI_MANAGED)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(COI_MANAGED)\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- BCL extras used by Unity/COI -->
+    <Reference Include="System.Net.Http">
+      <HintPath>$(COI_MANAGED)\System.Net.Http.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="System.Runtime">
+      <HintPath>$(COI_MANAGED)\System.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>
