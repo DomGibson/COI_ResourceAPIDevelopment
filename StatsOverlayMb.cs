@@ -19,9 +19,12 @@ namespace CoiStatsBridge
 
     void Update()
     {
-      // F9 primary; Alt+F9 fallback in case the game binds F9.
+      // F9 primary; Alt+F9 fallback
       if (Input.GetKeyDown(KeyCode.F9) || (Input.GetKey(KeyCode.LeftAlt) && Input.GetKeyDown(KeyCode.F9)))
+      {
         _show = !_show;
+        CoiLogger.Info($"F9 pressed. Overlay now {(_show ? "visible" : "hidden")}");
+      }
     }
 
     void OnGUI()
