@@ -1,143 +1,147 @@
 // StatsOverlayMb.cs
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace CoiStatsBridge
 {
-  public sealed class StatsOverlayMb : MonoBehaviour
+  /// <summary>
+  /// F9 to toggle, drag by the title bar.
+  /// </summary>
+  public class StatsOverlayMb : MonoBehaviour
   {
-    Rect _rect = new Rect(40, 40, 360, 220);
-    // Start hidden so F9 explicitly toggles visibility
-    bool _show = false;
-    int  _winId;
+    // Window + state
+    Rect _rect = new Rect(20, 20, 720, 520);
+    Vector2 _scroll;
+    bool _show = false; // start hidden; press F9 to open
+    const int _winId = unchecked((int)0xC01ABEEF);
 
-    GUIStyle _win, _label, _small;
-    Texture2D _bg, _titleBg, _dotCircle;
+    // Latest resources from the bridge
+    Dictionary<string, StatsBridgeMb.ResourceSample> _last =
+      new Dictionary<string, StatsBridgeMb.ResourceSample>();
+
+    // Cache a bridge reference for status light
+    StatsBridgeMb _bridge;
 
     void Awake()
     {
-      _winId = ("CoiStatsBridge.Window".GetHashCode() ^ 0x5A5A5A5A);
-      CoiLogger.Info("StatsOverlayMb awake");
+      // subscribe to live samples from the bridge
+      StatsBridgeMb.OnNewSample += OnSample;
+      // find bridge once (created by startup)
+      _bridge = FindObjectOfType<StatsBridgeMb>();
+    }
+
+    void OnDestroy()
+    {
+      StatsBridgeMb.OnNewSample -= OnSample;
+    }
+
+    void OnSample(Dictionary<string, StatsBridgeMb.ResourceSample> s)
+    {
+      _last = s ?? new Dictionary<string, StatsBridgeMb.ResourceSample>();
     }
 
     void Update()
     {
-      // F9 primary; Alt+F9 fallback (if the game intercepts F9 alone)
-      bool alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
       if (Input.GetKeyDown(KeyCode.F9))
       {
         _show = !_show;
-        CoiLogger.Info($"F9{(alt ? " (Alt)" : "")} pressed. Overlay now {(_show ? "visible" : "hidden")}");
+        CoiLogger.Info($"[CoiStatsBridge] F9 pressed. Overlay now {(_show ? "visible" : "hidden")}");
+        // If we just opened, ask the bridge to probe the server immediately
+        if (_show && _bridge != null) _bridge.ForceProbe();
       }
+
+      // Bridge could be created after scene load; refresh cache if missing
+      if (_bridge == null) _bridge = FindObjectOfType<StatsBridgeMb>();
     }
 
     void OnGUI()
     {
       if (!_show) return;
-      EnsureStyles();
-      _rect = GUI.Window(_winId, _rect, DrawWindow, GUIContent.none, _win);
+      _rect = GUI.Window(_winId, _rect, DrawWindow, "COI Stats Bridge (F9 to toggle)");
     }
 
     void DrawWindow(int id)
     {
-      DrawTitlebar();
+      // Drag by the title bar (top 24px)
+      GUI.DragWindow(new Rect(0, 0, _rect.width, 24));
 
-      var bridge = FindObjectOfType<StatsBridgeMb>();
-      var status = bridge != null ? bridge.Status : StatsBridgeMb.BridgeStatus.Offline;
+      // --- Status + debug header ---
+      var pad = 12f;
+      var lineH = 18f;
 
-      GUILayout.Space(8);
+      // traffic light at top-right
+      DrawStatusLight(new Rect(_rect.width - 24 - pad, 4, 20, 20));
+
+      // optional debug info if you have DebugState defined elsewhere
+      SafeLabel(new Rect(pad, 28, _rect.width - pad * 2, lineH),
+        Try(() => $"provider: {DebugState.Provider}", "provider: (n/a)"));
+      SafeLabel(new Rect(pad, 46, _rect.width - pad * 2, lineH),
+        Try(() => $"method:   {DebugState.Method}", "method:   (n/a)"));
+      SafeLabel(new Rect(pad, 64, _rect.width - pad * 2, lineH),
+        Try(() => $"products: {DebugState.Products}", "products: (n/a)"));
+
+      // --- Resources table ---
+      var top = 88f;
+      var w = _rect.width - pad * 2;
+      var h = _rect.height - top - pad;
+
+      GUILayout.BeginArea(new Rect(pad, top, w, h));
+      _scroll = GUILayout.BeginScrollView(_scroll);
+
+      // header
       GUILayout.BeginHorizontal();
-      DrawStatusDot(status);
-      GUILayout.Label("COI Stats Bridge", _label);
-      GUILayout.FlexibleSpace();
+      GUILayout.Label("Product", GUILayout.Width(w * 0.55f));
+      GUILayout.Label("Balance", GUILayout.Width(w * 0.20f));
+      GUILayout.Label("Net/min", GUILayout.Width(w * 0.20f));
       GUILayout.EndHorizontal();
 
-      if (bridge != null && !string.IsNullOrEmpty(bridge.LastError))
+      foreach (var r in _last.Values.OrderBy(v => v.net_per_min).Take(120))
       {
-        GUILayout.Space(6);
-        GUILayout.Label("Last error: " + bridge.LastError, _small);
+        GUILayout.BeginHorizontal();
+        GUILayout.Label(r.id, GUILayout.Width(w * 0.55f));
+        GUILayout.Label($"{r.balance:n0}", GUILayout.Width(w * 0.20f));
+        GUILayout.Label($"{r.net_per_min:+0.##;-0.##;0}", GUILayout.Width(w * 0.20f));
+        GUILayout.EndHorizontal();
       }
 
-      GUILayout.Space(10);
-      GUILayout.Label("F9: toggle • Drag by top bar", _small);
-
-      // Draggable region = whole top strip
-      GUI.DragWindow(new Rect(0, 0, Mathf.Infinity, 24));
+      GUILayout.EndScrollView();
+      GUILayout.EndArea();
     }
 
-    // ---------- UI helpers ----------
+    // --- helpers -------------------------------------------------------------
 
-    void DrawTitlebar()
+    void DrawStatusLight(Rect r)
     {
-      var r = GUILayoutUtility.GetRect(10, 20, GUILayout.ExpandWidth(true));
-      if (Event.current.type == EventType.Repaint) GUI.DrawTexture(r, _titleBg);
-      GUI.Label(r, "COI Stats Bridge", _label);
-    }
+      // default to grey if bridge not ready
+      var color = new Color(0.6f, 0.6f, 0.6f);
+      var label = "INIT";
 
-    void DrawStatusDot(StatsBridgeMb.BridgeStatus st)
-    {
-      Color c = new Color(0.6f, 0.6f, 0.6f, 1f);
-      if (st == StatsBridgeMb.BridgeStatus.Online) c = new Color(0.2f, 0.8f, 0.2f, 1f);
-      else if (st == StatsBridgeMb.BridgeStatus.Error) c = new Color(0.95f, 0.6f, 0.2f, 1f);
-      else if (st == StatsBridgeMb.BridgeStatus.Offline) c = new Color(0.9f, 0.2f, 0.2f, 1f);
-
-      var old = GUI.color;
-      GUI.color = c;
-      GUILayout.Label(_dotCircle, GUILayout.Width(14), GUILayout.Height(14));
-      GUI.color = old;
-
-      GUILayout.Space(6);
-    }
-
-    // ---------- styling ----------
-
-    void EnsureStyles()
-    {
-      if (_win != null) return;
-
-      _bg      = MakeTex(8, 8, new Color32(24, 28, 36, 230));
-      _titleBg = MakeTex(8, 8, new Color32(33, 38, 48, 255));
-      _dotCircle = MakeCircleTex(14, new Color32(255, 255, 255, 255));
-
-      _win = new GUIStyle(GUI.skin.window);
-      _win.normal.background = _bg;
-      _win.onNormal.background = _bg;
-      _win.padding = new RectOffset(10, 10, 28, 10);
-
-      _label = new GUIStyle(GUI.skin.label) { fontSize = 13 };
-
-      _small = new GUIStyle(GUI.skin.label)
+      if (_bridge != null)
       {
-        fontSize = 11,
-        normal = { textColor = new Color(0.75f, 0.8f, 0.9f, 1f) }
-      };
-    }
-
-    Texture2D MakeTex(int w, int h, Color color)
-    {
-      var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
-      var px = new Color[w * h];
-      for (int i = 0; i < px.Length; i++) px[i] = color;
-      tex.SetPixels(px);
-      tex.Apply(false, true);
-      return tex;
-    }
-
-    Texture2D MakeCircleTex(int d, Color color)
-    {
-      var tex = new Texture2D(d, d, TextureFormat.RGBA32, false);
-      int r = d / 2, cx = r, cy = r;
-      var px = new Color[d * d];
-      for (int y = 0; y < d; y++)
-      for (int x = 0; x < d; x++)
-      {
-        int dx = x - cx, dy = y - cy;
-        bool inside = (dx*dx + dy*dy) <= r*r;
-        var c = color; c.a = inside ? 1f : 0f;
-        px[y * d + x] = c;
+        if (_bridge.IsOnline) { color = new Color(0.20f, 0.75f, 0.25f); label = "ONLINE"; }
+        else                  { color = new Color(0.85f, 0.20f, 0.20f); label = "OFFLINE"; }
       }
-      tex.SetPixels(px);
-      tex.Apply(false, true);
-      return tex;
+
+      // light
+      var prev = GUI.color;
+      GUI.color = color;
+      GUI.DrawTexture(r, Texture2D.whiteTexture);
+      GUI.color = prev;
+
+      // label to the left of the light
+      var lr = new Rect(r.x - 70, r.y, 64, r.height);
+      GUI.Label(lr, label);
+    }
+
+    static void SafeLabel(Rect area, string text)
+    {
+      GUI.Label(area, text ?? string.Empty);
+    }
+
+    static string Try(System.Func<string> f, string fallback)
+    {
+      try { return f(); } catch { return fallback; }
     }
   }
 }
