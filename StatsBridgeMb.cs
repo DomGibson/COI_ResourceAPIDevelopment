@@ -1,46 +1,65 @@
-using System;
-using System.Collections.Generic;
-using System.Net;
-using System.IO;
-using System.Text;
+// StatsBridgeMb.cs
 using UnityEngine;
+using System.Collections;
+using System.Net.Http;
+using System.Threading.Tasks;
+using Mafi;
 
 namespace CoiStatsBridge
 {
-  public class StatsBridgeMb : MonoBehaviour
+  public sealed class StatsBridgeMb : MonoBehaviour
   {
-    public string Endpoint = "http://127.0.0.1:3001/ingest";
-    public float IntervalSec = 1f;
+    public enum BridgeStatus { Offline, Online, Error }
 
-    long _tick;
-    float _accum;
+    [Header("Server")]
+    public string BaseUrl = "http://127.0.0.1:3001"; // change if needed
+    public float  PingIntervalSec = 2f;
 
-    void Update()
+    [Header("State")]
+    public BridgeStatus Status = BridgeStatus.Offline;
+    public string LastError = "";
+
+    HttpClient _http;
+
+    void Awake()
     {
-      _accum += Time.unscaledDeltaTime;
-      if (_accum < IntervalSec) return;
-      _accum = 0f;
-
-      var snapshot = TypedSnapshotReader.Read();
-      var ts = NowMs();
-      var payload = JsonWriter.BuildPayload(ts, _tick, snapshot);
-      DebugState.Tick = _tick;
-      _tick++;
-
-      try
-      {
-        var req = (HttpWebRequest)WebRequest.Create(Endpoint);
-        req.Method = "POST";
-        req.ContentType = "application/json";
-        req.Timeout = 100;
-        var bytes = Encoding.UTF8.GetBytes(payload);
-        using (var rs = req.GetRequestStream()) { rs.Write(bytes, 0, bytes.Length); }
-        using (var resp = (HttpWebResponse)req.GetResponse()) {}
-        DebugState.LastPostUtc = DateTime.UtcNow.ToString("HH:mm:ss");
-      }
-      catch (Exception) {}
+      _http = new HttpClient();
+      _http.Timeout = System.TimeSpan.FromMilliseconds(800);
     }
 
-    static long NowMs() => (long)(DateTime.UtcNow - new DateTime(1970,1,1)).TotalMilliseconds;
+    void OnEnable()
+    {
+      StartCoroutine(PingLoop());
+    }
+
+    IEnumerator PingLoop()
+    {
+      while (true)
+      {
+        var t = PingOnce();
+        while (!t.IsCompleted) yield return null;
+        yield return new WaitForSeconds(PingIntervalSec);
+      }
+    }
+
+    Task PingOnce()
+    {
+      return Task.Run(async () =>
+      {
+        try
+        {
+          var resp = await _http.GetAsync(BaseUrl + "/health").ConfigureAwait(false);
+          Status = resp.IsSuccessStatusCode ? BridgeStatus.Online : BridgeStatus.Offline;
+          LastError = "";
+        }
+        catch (System.Exception ex)
+        {
+          Status = BridgeStatus.Offline;
+          LastError = ex.GetType().Name;
+        }
+      });
+    }
+
+    // (Optional) put your /ingest POST sender here later.
   }
 }
