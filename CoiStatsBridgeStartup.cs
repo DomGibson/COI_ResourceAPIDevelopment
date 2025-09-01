@@ -1,6 +1,5 @@
 // CoiStatsBridgeStartup.cs
 using UnityEngine;
-using Mafi;
 
 namespace CoiStatsBridge
 {
@@ -19,14 +18,14 @@ namespace CoiStatsBridge
         Object.DontDestroyOnLoad(_root);
         _root.hideFlags = HideFlags.DontSaveInBuild | HideFlags.DontSaveInEditor;
 
-        _root.AddComponent<StatsBridgeMb>();  // server pinger / sender
+        _root.AddComponent<StatsBridgeMb>();  // server pinger / (later) sender
         _root.AddComponent<StatsOverlayMb>(); // UI overlay
 
-        Log.Info("[CoiStatsBridge] Attached components (StatsBridgeMb, StatsOverlayMb).");
+        Debug.Log("[CoiStatsBridge] Attached StatsBridgeMb + StatsOverlayMb");
       }
       catch (System.Exception ex)
       {
-        Log.Error("[CoiStatsBridge] Startup failed: " + ex.Message);
+        Debug.LogError("[CoiStatsBridge] Startup failed: " + ex.Message);
       }
     }
   }

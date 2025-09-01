@@ -3,7 +3,6 @@ using UnityEngine;
 using System.Collections;
 using System.Net.Http;
 using System.Threading.Tasks;
-using Mafi;
 
 namespace CoiStatsBridge
 {
@@ -12,7 +11,7 @@ namespace CoiStatsBridge
     public enum BridgeStatus { Offline, Online, Error }
 
     [Header("Server")]
-    public string BaseUrl = "http://127.0.0.1:3001"; // change if needed
+    public string BaseUrl = "http://127.0.0.1:3001";
     public float  PingIntervalSec = 2f;
 
     [Header("State")]
@@ -49,8 +48,16 @@ namespace CoiStatsBridge
         try
         {
           var resp = await _http.GetAsync(BaseUrl + "/health").ConfigureAwait(false);
-          Status = resp.IsSuccessStatusCode ? BridgeStatus.Online : BridgeStatus.Offline;
-          LastError = "";
+          if (resp.IsSuccessStatusCode)
+          {
+            Status = BridgeStatus.Online;
+            LastError = "";
+          }
+          else
+          {
+            Status = BridgeStatus.Offline;
+            LastError = "HTTP " + (int)resp.StatusCode;
+          }
         }
         catch (System.Exception ex)
         {
@@ -59,7 +66,5 @@ namespace CoiStatsBridge
         }
       });
     }
-
-    // (Optional) put your /ingest POST sender here later.
   }
 }

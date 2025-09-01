@@ -9,7 +9,6 @@ namespace CoiStatsBridge
     bool _show = true;
     int  _winId;
 
-    // Styles / textures
     GUIStyle _win, _label, _small;
     Texture2D _bg, _titleBg, _dotCircle;
 
@@ -20,7 +19,7 @@ namespace CoiStatsBridge
 
     void Update()
     {
-      // Primary toggle: F9. Fallback: Alt+F9 in case the game consumes F9.
+      // F9 primary; Alt+F9 fallback in case the game binds F9.
       if (Input.GetKeyDown(KeyCode.F9) || (Input.GetKey(KeyCode.LeftAlt) && Input.GetKeyDown(KeyCode.F9)))
         _show = !_show;
     }
@@ -40,26 +39,26 @@ namespace CoiStatsBridge
       var status = bridge != null ? bridge.Status : StatsBridgeMb.BridgeStatus.Offline;
 
       GUILayout.Space(8);
-
       GUILayout.BeginHorizontal();
       DrawStatusDot(status);
       GUILayout.Label("COI Stats Bridge", _label);
       GUILayout.FlexibleSpace();
       GUILayout.EndHorizontal();
 
-      GUILayout.Space(6);
-
       if (bridge != null && !string.IsNullOrEmpty(bridge.LastError))
+      {
+        GUILayout.Space(6);
         GUILayout.Label("Last error: " + bridge.LastError, _small);
+      }
 
       GUILayout.Space(10);
       GUILayout.Label("F9: toggle • Drag by top bar", _small);
 
-      // Make the whole top strip draggable
+      // Draggable region = whole top strip
       GUI.DragWindow(new Rect(0, 0, Mathf.Infinity, 24));
     }
 
-    // ---------------- UI helpers ----------------
+    // ---------- UI helpers ----------
 
     void DrawTitlebar()
     {
@@ -70,7 +69,7 @@ namespace CoiStatsBridge
 
     void DrawStatusDot(StatsBridgeMb.BridgeStatus st)
     {
-      Color c = new Color(0.6f, 0.6f, 0.6f, 1f); // default: gray
+      Color c = new Color(0.6f, 0.6f, 0.6f, 1f);
       if (st == StatsBridgeMb.BridgeStatus.Online) c = new Color(0.2f, 0.8f, 0.2f, 1f);
       else if (st == StatsBridgeMb.BridgeStatus.Error) c = new Color(0.95f, 0.6f, 0.2f, 1f);
       else if (st == StatsBridgeMb.BridgeStatus.Offline) c = new Color(0.9f, 0.2f, 0.2f, 1f);
@@ -83,27 +82,28 @@ namespace CoiStatsBridge
       GUILayout.Space(6);
     }
 
-    // ---------------- styling ----------------
+    // ---------- styling ----------
 
     void EnsureStyles()
     {
       if (_win != null) return;
 
-      _bg = MakeTex(8, 8, new Color32(24, 28, 36, 230));
+      _bg      = MakeTex(8, 8, new Color32(24, 28, 36, 230));
       _titleBg = MakeTex(8, 8, new Color32(33, 38, 48, 255));
       _dotCircle = MakeCircleTex(14, new Color32(255, 255, 255, 255));
 
       _win = new GUIStyle(GUI.skin.window);
       _win.normal.background = _bg;
       _win.onNormal.background = _bg;
-      _win.padding = new RectOffset(10, 10, 28, 10); // leave space for title bar
+      _win.padding = new RectOffset(10, 10, 28, 10);
 
-      _label = new GUIStyle(GUI.skin.label);
-      _label.fontSize = 13;
+      _label = new GUIStyle(GUI.skin.label) { fontSize = 13 };
 
-      _small = new GUIStyle(GUI.skin.label);
-      _small.fontSize = 11;
-      _small.normal.textColor = new Color(0.75f, 0.8f, 0.9f, 1f);
+      _small = new GUIStyle(GUI.skin.label)
+      {
+        fontSize = 11,
+        normal = { textColor = new Color(0.75f, 0.8f, 0.9f, 1f) }
+      };
     }
 
     Texture2D MakeTex(int w, int h, Color color)
@@ -119,16 +119,14 @@ namespace CoiStatsBridge
     Texture2D MakeCircleTex(int d, Color color)
     {
       var tex = new Texture2D(d, d, TextureFormat.RGBA32, false);
-      int r = d / 2;
-      int cx = r, cy = r;
+      int r = d / 2, cx = r, cy = r;
       var px = new Color[d * d];
       for (int y = 0; y < d; y++)
       for (int x = 0; x < d; x++)
       {
         int dx = x - cx, dy = y - cy;
-        bool inside = (dx * dx + dy * dy) <= r * r;
-        var c = color;
-        c.a = inside ? 1f : 0f;
+        bool inside = (dx*dx + dy*dy) <= r*r;
+        var c = color; c.a = inside ? 1f : 0f;
         px[y * d + x] = c;
       }
       tex.SetPixels(px);
