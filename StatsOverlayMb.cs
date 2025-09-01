@@ -1,4 +1,5 @@
 // StatsOverlayMb.cs
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -11,137 +12,207 @@ namespace CoiStatsBridge
   public class StatsOverlayMb : MonoBehaviour
   {
     // Window + state
-    Rect _rect = new Rect(20, 20, 720, 520);
-    Vector2 _scroll;
-    bool _show = false; // start hidden; press F9 to open
-    const int _winId = unchecked((int)0xC01ABEEF);
+    private Rect _rect = new Rect(40, 40, 720, 520);
+    private Vector2 _scroll;
+    private bool _show = true; // start visible for sanity-check; press F9 to hide/show
+    private const int WinId = unchecked((int)0xC01ABEEF);
 
-    // Latest resources from the bridge
-    Dictionary<string, StatsBridgeMb.ResourceSample> _last =
+    // Optional bridge hook (if present)
+    private StatsBridgeMb _bridge;
+    private Dictionary<string, StatsBridgeMb.ResourceSample> _last =
       new Dictionary<string, StatsBridgeMb.ResourceSample>();
 
-    // Cache a bridge reference for status light
-    StatsBridgeMb _bridge;
+    // Simple badge styles that DON'T require TextRendering enums
+    private GUIStyle _badgeOk, _badgeWarn, _badgeErr, _mono, _header;
 
-    void Awake()
+    private void Awake()
     {
-      // subscribe to live samples from the bridge
-      StatsBridgeMb.OnNewSample += OnSample;
-      // find bridge once (created by startup)
-      _bridge = FindObjectOfType<StatsBridgeMb>();
+      DontDestroyOnLoad(gameObject);
+      TryBindBridge();
+      BuildStyles();
+      CoiLogger.Info("[Overlay] Awake");
     }
 
-    void OnDestroy()
+    private void OnEnable()
+    {
+      // subscribe once
+      StatsBridgeMb.OnNewSample -= OnSample;
+      StatsBridgeMb.OnNewSample += OnSample;
+    }
+
+    private void OnDisable()
     {
       StatsBridgeMb.OnNewSample -= OnSample;
     }
 
-    void OnSample(Dictionary<string, StatsBridgeMb.ResourceSample> s)
-    {
-      _last = s ?? new Dictionary<string, StatsBridgeMb.ResourceSample>();
-    }
-
-    void Update()
+    private void Update()
     {
       if (Input.GetKeyDown(KeyCode.F9))
       {
         _show = !_show;
-        CoiLogger.Info($"[CoiStatsBridge] F9 pressed. Overlay now {(_show ? "visible" : "hidden")}");
-        // If we just opened, ask the bridge to probe the server immediately
-        if (_show && _bridge != null) _bridge.ForceProbe();
+        CoiLogger.Info("[Overlay] Toggle -> " + (_show ? "ON" : "OFF"));
       }
-
-      // Bridge could be created after scene load; refresh cache if missing
-      if (_bridge == null) _bridge = FindObjectOfType<StatsBridgeMb>();
     }
 
-    void OnGUI()
+    private void OnGUI()
     {
-      if (!_show) return;
-      _rect = GUI.Window(_winId, _rect, DrawWindow, "COI Stats Bridge (F9 to toggle)");
-    }
-
-    void DrawWindow(int id)
-    {
-      // Drag by the title bar (top 24px)
-      GUI.DragWindow(new Rect(0, 0, _rect.width, 24));
-
-      // --- Status + debug header ---
-      var pad = 12f;
-      var lineH = 18f;
-
-      // traffic light at top-right
-      DrawStatusLight(new Rect(_rect.width - 24 - pad, 4, 20, 20));
-
-      // optional debug info if you have DebugState defined elsewhere
-      SafeLabel(new Rect(pad, 28, _rect.width - pad * 2, lineH),
-        Try(() => $"provider: {DebugState.Provider}", "provider: (n/a)"));
-      SafeLabel(new Rect(pad, 46, _rect.width - pad * 2, lineH),
-        Try(() => $"method:   {DebugState.Method}", "method:   (n/a)"));
-      SafeLabel(new Rect(pad, 64, _rect.width - pad * 2, lineH),
-        Try(() => $"products: {DebugState.Products}", "products: (n/a)"));
-
-      // --- Resources table ---
-      var top = 88f;
-      var w = _rect.width - pad * 2;
-      var h = _rect.height - top - pad;
-
-      GUILayout.BeginArea(new Rect(pad, top, w, h));
-      _scroll = GUILayout.BeginScrollView(_scroll);
-
-      // header
-      GUILayout.BeginHorizontal();
-      GUILayout.Label("Product", GUILayout.Width(w * 0.55f));
-      GUILayout.Label("Balance", GUILayout.Width(w * 0.20f));
-      GUILayout.Label("Net/min", GUILayout.Width(w * 0.20f));
-      GUILayout.EndHorizontal();
-
-      foreach (var r in _last.Values.OrderBy(v => v.net_per_min).Take(120))
+      try
       {
+        // Also catch F9 here in case game UI swallows Update()
+        Event e = Event.current;
+        if (e != null && e.type == EventType.KeyDown && e.keyCode == KeyCode.F9)
+        {
+          _show = !_show;
+          e.Use();
+          CoiLogger.Info("[Overlay] Toggle (OnGUI) -> " + (_show ? "ON" : "OFF"));
+        }
+
+        if (!_show) return;
+
+        _rect = GUI.Window(WinId, _rect, DrawWindow, "COI Resource Bridge (F9 to toggle)");
+      }
+      catch (Exception ex)
+      {
+        CoiLogger.Warn("[Overlay] OnGUI exception: " + ex.Message);
+      }
+    }
+
+    private void DrawWindow(int id)
+    {
+      try
+      {
+        if (_mono == null) BuildStyles();
+
+        // Header row
+        GUILayout.Space(6);
         GUILayout.BeginHorizontal();
-        GUILayout.Label(r.id, GUILayout.Width(w * 0.55f));
-        GUILayout.Label($"{r.balance:n0}", GUILayout.Width(w * 0.20f));
-        GUILayout.Label($"{r.net_per_min:+0.##;-0.##;0}", GUILayout.Width(w * 0.20f));
+        GUILayout.Label("Captain of Industry → Localhost feed", _header);
+        GUILayout.FlexibleSpace();
+
+        var statusPair = GetBridgeStatus();
+        DrawStatusBadge(statusPair.Item1);
         GUILayout.EndHorizontal();
+
+        // Server + error
+        string url = statusPair.Item2;
+        GUILayout.Label("Server: " + url, _mono);
+        if (_bridge != null && !string.IsNullOrEmpty(_bridge.LastError))
+        {
+          GUILayout.Label("Last error: " + _bridge.LastError, _mono);
+        }
+
+        // Payload summary if available
+        if (_bridge != null && !string.IsNullOrEmpty(_bridge.LastPayload))
+        {
+          GUILayout.Label("Last payload size: " + _bridge.LastPayload.Length + " chars", _mono);
+        }
+
+        GUILayout.Space(6);
+        GUILayout.Label("Latest sample", _header);
+
+        _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.Height(420));
+        if (_last != null && _last.Count > 0)
+        {
+          foreach (var kv in _last.OrderBy(k => k.Key))
+          {
+            GUILayout.BeginHorizontal();
+            // left: resource id
+            GUILayout.Label(kv.Key, _mono, GUILayout.Width(260));
+            GUILayout.FlexibleSpace();
+            // right: numbers
+            var s = kv.Value;
+            GUILayout.Label(
+              "balance: " + s.balance.ToString("0.##") + "   " +
+              "net/min: " + s.net_per_min.ToString("0.##"),
+              _mono);
+            GUILayout.EndHorizontal();
+          }
+        }
+        else
+        {
+          GUILayout.Label("No samples yet.", _mono);
+        }
+        GUILayout.EndScrollView();
+
+        // Drag window by title area
+        var dragRect = new Rect(0, 0, _rect.width, 24);
+        GUI.DragWindow(dragRect);
       }
-
-      GUILayout.EndScrollView();
-      GUILayout.EndArea();
-    }
-
-    // --- helpers -------------------------------------------------------------
-
-    void DrawStatusLight(Rect r)
-    {
-      // default to grey if bridge not ready
-      var color = new Color(0.6f, 0.6f, 0.6f);
-      var label = "INIT";
-
-      if (_bridge != null)
+      catch (Exception ex)
       {
-        if (_bridge.IsOnline) { color = new Color(0.20f, 0.75f, 0.25f); label = "ONLINE"; }
-        else                  { color = new Color(0.85f, 0.20f, 0.20f); label = "OFFLINE"; }
+        CoiLogger.Warn("[Overlay] DrawWindow exception: " + ex.Message);
       }
-
-      // light
-      var prev = GUI.color;
-      GUI.color = color;
-      GUI.DrawTexture(r, Texture2D.whiteTexture);
-      GUI.color = prev;
-
-      // label to the left of the light
-      var lr = new Rect(r.x - 70, r.y, 64, r.height);
-      GUI.Label(lr, label);
     }
 
-    static void SafeLabel(Rect area, string text)
+    private void TryBindBridge()
     {
-      GUI.Label(area, text ?? string.Empty);
+      try
+      {
+        // Using FindObjectOfType for widest Unity compatibility; warning is fine.
+        _bridge = UnityEngine.Object.FindObjectOfType<StatsBridgeMb>();
+      }
+      catch { _bridge = null; }
     }
 
-    static string Try(System.Func<string> f, string fallback)
+    private void OnSample(Dictionary<string, StatsBridgeMb.ResourceSample> s)
     {
-      try { return f(); } catch { return fallback; }
+      _last = s ?? new Dictionary<string, StatsBridgeMb.ResourceSample>();
+    }
+
+    private Tuple<StatsBridgeMb.BridgeStatus, string> GetBridgeStatus()
+    {
+      if (_bridge == null) TryBindBridge();
+      if (_bridge == null) return Tuple.Create(StatsBridgeMb.BridgeStatus.Unknown, "not found");
+
+      try
+      {
+        string u = _bridge.ServerUrl ?? "n/a";
+        return Tuple.Create(_bridge.Status, u);
+      }
+      catch
+      {
+        return Tuple.Create(StatsBridgeMb.BridgeStatus.Unknown, "n/a");
+      }
+    }
+
+    private void BuildStyles()
+    {
+      // Monospace-like readable label
+      _mono = new GUIStyle(GUI.skin.label);
+      _mono.richText = false; // safer in IMGUI overlays
+
+      _header = new GUIStyle(GUI.skin.label);
+      _header.fontSize = 14; // fontSize does NOT pull TextRendering enums
+
+      _badgeOk = MakeBadge(new Color(0.24f, 0.71f, 0.44f));   // green-ish
+      _badgeWarn = MakeBadge(new Color(0.85f, 0.65f, 0.13f)); // golden
+      _badgeErr = MakeBadge(new Color(0.80f, 0.36f, 0.36f));  // red-ish
+    }
+
+    private GUIStyle MakeBadge(Color c)
+    {
+      var tex = new Texture2D(1, 1);
+      tex.SetPixel(0, 0, c);
+      tex.Apply();
+
+      var s = new GUIStyle(GUI.skin.box);
+      s.normal.background = tex;
+      s.normal.textColor = Color.black;
+      // no s.alignment = TextAnchor... (avoids TextRendering module)
+      s.padding = new RectOffset(8, 8, 2, 2);
+      s.margin  = new RectOffset(4, 4, 2, 2);
+      return s;
+    }
+    private void DrawStatusBadge(StatsBridgeMb.BridgeStatus status)
+    {
+      GUIStyle s = _badgeWarn;
+      string text = "UNKNOWN";
+
+      if (status == StatsBridgeMb.BridgeStatus.Online) { s = _badgeOk; text = "ONLINE"; }
+      else if (status == StatsBridgeMb.BridgeStatus.Offline) { s = _badgeWarn; text = "OFFLINE"; }
+      else if (status == StatsBridgeMb.BridgeStatus.Error) { s = _badgeErr; text = "ERROR"; }
+
+      GUILayout.Label(text, s, GUILayout.Width(90));
     }
   }
 }

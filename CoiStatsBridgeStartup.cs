@@ -1,3 +1,4 @@
+// CoiStatsBridgeStartup.cs
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -15,54 +16,31 @@ namespace CoiStatsBridge
 
       if (!s_hooked)
       {
-        SceneManager.sceneLoaded += OnSceneLoaded;
+        SceneManager.sceneLoaded += (_, __) => EnsureBridgeAndOverlay();
         s_hooked = true;
       }
     }
 
-    private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
-    {
-      CoiLogger.Info($"[CoiStatsBridge] sceneLoaded: {scene.name} ({mode})");
-      EnsureBridgeAndOverlay();
-    }
-
     private static void EnsureBridgeAndOverlay()
     {
-      // --- Bridge on a stable persistent GO ---
-      const string BRIDGE_GO = "CoiStatsBridgeGO";
-      var bridgeGo = GameObject.Find(BRIDGE_GO);
-      if (bridgeGo == null)
-      {
-        bridgeGo = new GameObject(BRIDGE_GO);
-        Object.DontDestroyOnLoad(bridgeGo);
-      }
+      var root = GameObject.Find("[CoiStatsBridge]") ?? new GameObject("[CoiStatsBridge]");
+      Object.DontDestroyOnLoad(root);
 
-      bool addedBridge = false;
-      if (bridgeGo.GetComponent<StatsBridgeMb>() == null)
+      var bridge  = root.GetComponent<StatsBridgeMb>();
+      var overlay = root.GetComponent<StatsOverlayMb>();
+
+      bool addedBridge = false, addedOverlay = false;
+
+      if (bridge == null)
       {
-        bridgeGo.AddComponent<StatsBridgeMb>();
+        bridge = root.AddComponent<StatsBridgeMb>();
         addedBridge = true;
       }
 
-      // --- Overlay on its own persistent GO (clean separation/UI toggling with F9) ---
-      const string OVERLAY_GO = "CoiStatsOverlay";
-      var overlay = Object.FindObjectOfType<StatsOverlayMb>(); // OK to be anywhere
-      bool addedOverlay = false;
-
       if (overlay == null)
       {
-        var overlayGo = GameObject.Find(OVERLAY_GO);
-        if (overlayGo == null)
-        {
-          overlayGo = new GameObject(OVERLAY_GO);
-          Object.DontDestroyOnLoad(overlayGo);
-        }
-        overlay = overlayGo.GetComponent<StatsOverlayMb>();
-        if (overlay == null)
-        {
-          overlay = overlayGo.AddComponent<StatsOverlayMb>();
-          addedOverlay = true;
-        }
+        overlay = root.AddComponent<StatsOverlayMb>();
+        addedOverlay = true;
       }
 
       if (addedBridge || addedOverlay)
