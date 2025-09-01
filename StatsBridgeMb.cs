@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Net.Http;
 using UnityEngine;
 
@@ -12,6 +13,15 @@ namespace CoiStatsBridge
     public enum BridgeStatus { Unknown, Offline, Online, Error }
 
     public string ServerUrl = "http://127.0.0.1:3001";
+
+    public struct ResourceSample
+    {
+      public string id;
+      public double balance;
+      public double net_per_min;
+    }
+
+    public static event Action<Dictionary<string, ResourceSample>> OnNewSample;
 
     public bool IsOnline { get; private set; }
     public BridgeStatus Status { get; private set; } = BridgeStatus.Unknown;
@@ -93,6 +103,7 @@ namespace CoiStatsBridge
         var body = bodyTask.Result ?? "{}";
         LastPayload = Truncate(body, 8000);
         LastResourceCount = CountResourceKeys(body);
+        OnNewSample?.Invoke(new Dictionary<string, ResourceSample>());
 
         LastError = null;
         SetStatus(BridgeStatus.Online, true);

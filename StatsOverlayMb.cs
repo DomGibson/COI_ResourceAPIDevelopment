@@ -1,140 +1,80 @@
 // StatsOverlayMb.cs
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
+using static CoiStatsBridge.StatsBridgeMb;
 
 namespace CoiStatsBridge
 {
-  public sealed class StatsOverlayMb : MonoBehaviour
+  /// <summary>
+  /// F9 to toggle, drag by the title bar.
+  /// </summary>
+  public class StatsOverlayMb : MonoBehaviour
   {
-    Rect _rect = new Rect(40, 40, 360, 220);
+    static GameObject _host;
+    static StatsOverlayMb _inst;
+
     bool _show = true;
-    int  _winId;
+    Vector2 _scroll;
 
-    GUIStyle _win, _label, _small;
-    Texture2D _bg, _titleBg, _dotCircle;
+    // Window state
+    Rect _rect = new Rect(20, 20, 720, 520);
+    const int _winId = unchecked((int)0xC01ABEEF);
 
-    void Awake()
+    Dictionary<string, ResourceSample> _last = new();
+
+    public static void Install()
     {
-      _winId = ("CoiStatsBridge.Window".GetHashCode() ^ 0x5A5A5A5A);
+      if (_inst != null) return;
+      _host = new GameObject("CoiStatsBridge_StatsOverlay");
+      Object.DontDestroyOnLoad(_host);
+      _inst = _host.AddComponent<StatsOverlayMb>();
     }
+
+    void Awake()  { StatsBridgeMb.OnNewSample += OnSample; }
+    void OnDestroy(){ StatsBridgeMb.OnNewSample -= OnSample; }
+
+    void OnSample(Dictionary<string, ResourceSample> s) => _last = s;
 
     void Update()
     {
-      // F9 primary; Alt+F9 fallback
-      if (Input.GetKeyDown(KeyCode.F9) || (Input.GetKey(KeyCode.LeftAlt) && Input.GetKeyDown(KeyCode.F9)))
-      {
-        _show = !_show;
-        CoiLogger.Info($"F9 pressed. Overlay now {(_show ? "visible" : "hidden")}");
-      }
+      if (Input.GetKeyDown(KeyCode.F9)) _show = !_show;
     }
 
     void OnGUI()
     {
       if (!_show) return;
-      EnsureStyles();
-      _rect = GUI.Window(_winId, _rect, DrawWindow, GUIContent.none, _win);
+      _rect = GUI.Window(_winId, _rect, DrawWindow, "COI Stats Bridge (F9 to toggle)");
     }
 
     void DrawWindow(int id)
     {
-      DrawTitlebar();
+      // Drag by the title bar (top 24px)
+      GUI.DragWindow(new Rect(0, 0, _rect.width, 24));
 
-      var bridge = FindObjectOfType<StatsBridgeMb>();
-      var status = bridge != null ? bridge.Status : StatsBridgeMb.BridgeStatus.Offline;
+      // Debug lines (provider/method/products)
+      GUI.Label(new Rect(12, 28, _rect.width - 24, 20), $"provider: {DebugState.Provider}");
+      GUI.Label(new Rect(12, 46, _rect.width - 24, 20), $"method:   {DebugState.Method}");
+      GUI.Label(new Rect(12, 64, _rect.width - 24, 20), $"products: {DebugState.Products}");
 
-      GUILayout.Space(8);
-      GUILayout.BeginHorizontal();
-      DrawStatusDot(status);
-      GUILayout.Label("COI Stats Bridge", _label);
-      GUILayout.FlexibleSpace();
-      GUILayout.EndHorizontal();
-
-      if (bridge != null && !string.IsNullOrEmpty(bridge.LastError))
+      // Table
+      var pad = 12f;
+      var top = 88f;
+      var w = _rect.width - pad * 2;
+      var h = _rect.height - top - pad;
+      GUILayout.BeginArea(new Rect(pad, top, w, h));
+      _scroll = GUILayout.BeginScrollView(_scroll);
+      foreach (var r in _last.Values.OrderBy(v => v.net_per_min).Take(120))
       {
-        GUILayout.Space(6);
-        GUILayout.Label("Last error: " + bridge.LastError, _small);
+        GUILayout.BeginHorizontal();
+        GUILayout.Label(r.id, GUILayout.Width(w * 0.55f));
+        GUILayout.Label($"bal: {r.balance:n0}", GUILayout.Width(w * 0.20f));
+        GUILayout.Label($"net/min: {r.net_per_min:+0.##;-0.##;0}", GUILayout.Width(w * 0.20f));
+        GUILayout.EndHorizontal();
       }
-
-      GUILayout.Space(10);
-      GUILayout.Label("F9: toggle • Drag by top bar", _small);
-
-      // Draggable region = whole top strip
-      GUI.DragWindow(new Rect(0, 0, Mathf.Infinity, 24));
-    }
-
-    // ---------- UI helpers ----------
-
-    void DrawTitlebar()
-    {
-      var r = GUILayoutUtility.GetRect(10, 20, GUILayout.ExpandWidth(true));
-      if (Event.current.type == EventType.Repaint) GUI.DrawTexture(r, _titleBg);
-      GUI.Label(r, "COI Stats Bridge", _label);
-    }
-
-    void DrawStatusDot(StatsBridgeMb.BridgeStatus st)
-    {
-      Color c = new Color(0.6f, 0.6f, 0.6f, 1f);
-      if (st == StatsBridgeMb.BridgeStatus.Online) c = new Color(0.2f, 0.8f, 0.2f, 1f);
-      else if (st == StatsBridgeMb.BridgeStatus.Error) c = new Color(0.95f, 0.6f, 0.2f, 1f);
-      else if (st == StatsBridgeMb.BridgeStatus.Offline) c = new Color(0.9f, 0.2f, 0.2f, 1f);
-
-      var old = GUI.color;
-      GUI.color = c;
-      GUILayout.Label(_dotCircle, GUILayout.Width(14), GUILayout.Height(14));
-      GUI.color = old;
-
-      GUILayout.Space(6);
-    }
-
-    // ---------- styling ----------
-
-    void EnsureStyles()
-    {
-      if (_win != null) return;
-
-      _bg      = MakeTex(8, 8, new Color32(24, 28, 36, 230));
-      _titleBg = MakeTex(8, 8, new Color32(33, 38, 48, 255));
-      _dotCircle = MakeCircleTex(14, new Color32(255, 255, 255, 255));
-
-      _win = new GUIStyle(GUI.skin.window);
-      _win.normal.background = _bg;
-      _win.onNormal.background = _bg;
-      _win.padding = new RectOffset(10, 10, 28, 10);
-
-      _label = new GUIStyle(GUI.skin.label) { fontSize = 13 };
-
-      _small = new GUIStyle(GUI.skin.label)
-      {
-        fontSize = 11,
-        normal = { textColor = new Color(0.75f, 0.8f, 0.9f, 1f) }
-      };
-    }
-
-    Texture2D MakeTex(int w, int h, Color color)
-    {
-      var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
-      var px = new Color[w * h];
-      for (int i = 0; i < px.Length; i++) px[i] = color;
-      tex.SetPixels(px);
-      tex.Apply(false, true);
-      return tex;
-    }
-
-    Texture2D MakeCircleTex(int d, Color color)
-    {
-      var tex = new Texture2D(d, d, TextureFormat.RGBA32, false);
-      int r = d / 2, cx = r, cy = r;
-      var px = new Color[d * d];
-      for (int y = 0; y < d; y++)
-      for (int x = 0; x < d; x++)
-      {
-        int dx = x - cx, dy = y - cy;
-        bool inside = (dx*dx + dy*dy) <= r*r;
-        var c = color; c.a = inside ? 1f : 0f;
-        px[y * d + x] = c;
-      }
-      tex.SetPixels(px);
-      tex.Apply(false, true);
-      return tex;
+      GUILayout.EndScrollView();
+      GUILayout.EndArea();
     }
   }
 }
+
