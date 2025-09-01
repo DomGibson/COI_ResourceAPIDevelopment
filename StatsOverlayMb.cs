@@ -6,7 +6,8 @@ namespace CoiStatsBridge
   public sealed class StatsOverlayMb : MonoBehaviour
   {
     Rect _rect = new Rect(40, 40, 360, 220);
-    bool _show = true;
+    // Start hidden so F9 explicitly toggles visibility
+    bool _show = false;
     int  _winId;
 
     GUIStyle _win, _label, _small;
@@ -15,15 +16,17 @@ namespace CoiStatsBridge
     void Awake()
     {
       _winId = ("CoiStatsBridge.Window".GetHashCode() ^ 0x5A5A5A5A);
+      CoiLogger.Info("StatsOverlayMb awake");
     }
 
     void Update()
     {
-      // F9 primary; Alt+F9 fallback
-      if (Input.GetKeyDown(KeyCode.F9) || (Input.GetKey(KeyCode.LeftAlt) && Input.GetKeyDown(KeyCode.F9)))
+      // F9 primary; Alt+F9 fallback (if the game intercepts F9 alone)
+      bool alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+      if (Input.GetKeyDown(KeyCode.F9))
       {
         _show = !_show;
-        CoiLogger.Info($"F9 pressed. Overlay now {(_show ? "visible" : "hidden")}");
+        CoiLogger.Info($"F9{(alt ? " (Alt)" : "")} pressed. Overlay now {(_show ? "visible" : "hidden")}");
       }
     }
 
