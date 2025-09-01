@@ -1,4 +1,3 @@
-// CoiLogger.cs
 using System;
 using System.Linq;
 using System.Reflection;
@@ -17,30 +16,33 @@ namespace CoiStatsBridge
       _bound = true;
       try
       {
-        // Find Mafi.Log in loaded assemblies
         var mafiLog = AppDomain.CurrentDomain.GetAssemblies()
           .Select(a => a.GetType("Mafi.Log", throwOnError: false))
           .FirstOrDefault(t => t != null);
 
         if (mafiLog != null)
         {
-          _info  = mafiLog.GetMethod("Info",    BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(string) }, null)
-               ?? mafiLog.GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(m => m.Name == "Info"    && m.GetParameters().Length == 1);
-          _warn  = mafiLog.GetMethod("Warning", BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(string) }, null)
-               ?? mafiLog.GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(m => m.Name.Contains("Warn") && m.GetParameters().Length == 1);
-          _error = mafiLog.GetMethod("Error",   BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(string) }, null)
-               ?? mafiLog.GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(m => m.Name == "Error"   && m.GetParameters().Length == 1);
+          _info  = mafia(mi: mafiLog, name: "Info");
+          _warn  = mafia(mi: mafiLog, name: "Warning", altContains: "Warn");
+          _error = mafia(mi: mafiLog, name: "Error");
 
-          // Confirm binding right into the COI log
           try { _info?.Invoke(null, new object[] { "[CoiStatsBridge] Logger bound to Mafi.Log" }); } catch { }
         }
       }
-      catch { /* ignore and fallback to Unity */ }
+      catch { /* fallback to Unity */ }
     }
 
-    static void Call(MethodInfo mi, string msg)
+    static MethodInfo mafia(Type mi, string name, string altContains = null)
     {
-      try { mi?.Invoke(null, new object[] { msg }); }
+      return mi.GetMethod(name, BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(string) }, null)
+          ?? mi.GetMethods(BindingFlags.Public | BindingFlags.Static)
+               .FirstOrDefault(m => (altContains == null ? m.Name == name : m.Name.Contains(altContains))
+                                    && m.GetParameters().Length == 1);
+    }
+
+    static void Call(MethodInfo method, string msg)
+    {
+      try { method?.Invoke(null, new object[] { msg }); }
       catch { Debug.Log(msg); }
     }
 
