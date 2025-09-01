@@ -23,15 +23,18 @@ namespace CoiStatsBridge
     {
       const string GO_NAME = "CoiStatsBridgeGO";
       var go = GameObject.Find(GO_NAME);
-      if (go != null) return;
+      if (go == null)
+      {
+        go = new GameObject(GO_NAME);
+        Object.DontDestroyOnLoad(go);
+      }
 
-      go = new GameObject(GO_NAME);
-      Object.DontDestroyOnLoad(go);
+      bool addedBridge = false, addedOverlay = false;
+      if (go.GetComponent<StatsBridgeMb>() == null) { go.AddComponent<StatsBridgeMb>(); addedBridge = true; }
+      if (go.GetComponent<StatsOverlayMb>() == null) { go.AddComponent<StatsOverlayMb>(); addedOverlay = true; }
 
-      if (go.GetComponent<StatsBridgeMb>() == null) go.AddComponent<StatsBridgeMb>();
-      if (go.GetComponent<StatsOverlayMb>() == null) go.AddComponent<StatsOverlayMb>();
-
-      CoiLogger.Info("Attached StatsBridgeMb + StatsOverlayMb");
+      if (addedBridge || addedOverlay)
+        CoiLogger.Info("Attached StatsBridgeMb + StatsOverlayMb");
     }
   }
 }
